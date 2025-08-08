@@ -1,0 +1,14 @@
+
+# Render Blueprint for DLP Trip Assistant
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: dlp-trip-assistant
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: OPENWEATHER_API_KEY
+        sync: false  # set in Render dashboard after deploy
