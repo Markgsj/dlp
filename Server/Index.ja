@@ -1,0 +1,55 @@
+import express from 'express';
+import fetch from 'node-fetch';
+import cors from 'cors';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 8787;
+// Queue-Times park IDs: DLP=4, WDS=6
+const DLP_PARKS = [4, 6];
+
+async function getJSON(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': 'dlp-trip-assistant/1.0' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
+  return res.json();
+}
+
+app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+app.get('/api/parks', async (_, res) => {
+  try {
+    const parks = await getJSON('https://queue-times.com/parks.json');
+    const flat = [];
+    for (const group of parks) for (const park of group.parks) if (DLP_PARKS.includes(park.id)) flat.push(park);
+    res.json(flat);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/queue-times/:parkId', async (req, res) => {
+  const parkId = Number(req.params.parkId);
+  if (!DLP_PARKS.includes(parkId)) return res.status(400).json({ error: 'Unsupported park' });
+  try {
+    const data = await getJSON(`https://queue-times.com/parks/${parkId}/queue_times.json`);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Weather (OpenWeather One Call 3.0) for DLP coords by default
+app.get('/api/weather', async (req, res) => {
+  const lat = req.query.lat || '48.870';
+  const lon = req.query.lon || '2.779';
+  const apiKey = process.env.OPENWEATHER_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Missing OPENWEATHER_API_KEY' });
+  try {
+    const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=minutely,alerts&appid=${apiKey}&units=metric`;
+    const data = await getJSON(url);
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.use('/', express.static('web'));
+app.listen(PORT, () => console.log(`DLP Trip Assistant on http://localhost:${PORT}`));
